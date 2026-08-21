@@ -1,8 +1,8 @@
-# PACT — Privacy-Preserving Multi-Agent Humanitarian Coordination Platform
+# PACT — Privacy-Preserving Agent Coordination Technology
 
 > **"Zero-connectivity resilience, zero hallucinated aid, zero-knowledge privacy."**
 
-PACT is an emergency humanitarian dispatch platform built for rapid coordination during infrastructure blackouts, disasters, and telecommunications collapse.
+PACT is an emergency humanitarian coordination and dispatch platform built for rapid multi-agent response during infrastructure blackouts, disasters, and telecommunications collapse.
 
 ---
 
