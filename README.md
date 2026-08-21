@@ -6,33 +6,96 @@ PACT is an emergency humanitarian coordination and dispatch platform built for r
 
 ---
 
-## ⚡ Key Capabilities & Architecture
+## 💡 The Core Innovation: 2G When the Internet Fails
 
-1. **Ultra-Compressed Base-36 & PACK10 Geolocation Codec**:
-   - Compresses complete multi-parameter citizen emergency requests into **35 GSM-7 characters** (`Q|001|7F3K|15223C03Q0|6QR6VFBQ33|7F`), leaving 125 characters spare in standard SMS.
-   - Encodes global GPS coordinates down to **~1.1-meter precision** in 10 characters (`PACK10`) without external heavy geohash dependencies.
-   - Dynamic 2-digit uppercase hexadecimal **XOR Checksum** validation on every frame.
-2. **Dual-Channel Ingestion (SMS & HTTP REST)**:
-   - `POST /api/v1/pact/ingest`: Unified wire format endpoint for mobile apps and field gateways.
-   - `POST /api/v1/sms/webhook`: Adapter endpoint for Termux rootless SMS gateways and cellular modems.
-   - Complete canonical SMS registry (`Q`, `G`, `N`, `R`, `A`, `S`, `C`, `X`, `M`, `P`, `RT`, `E`) + legacy demo fallback.
-3. **12-Stage Multi-Agent Reasoning Pipeline & Hallucination Firewall**:
-   - **A0 Intake**: Python frame parsing & XOR checksum validation.
-   - **A1 Dedupe**: Compound deduplication check on `(uid, seq)`.
-   - **A2 Triage**: Groq `llama-3.3-70b-versatile` (with deterministic fallback) situational triage & risk scoring.
-   - **A3 Geo Matcher**: MongoDB `$geoNear` 2dsphere spatial index cascading search rings (`10km -> 25km -> 60km -> 150km`).
-   - **A4 Advocates**: Groq parallel deliberation simulating provider stances & operational constraints.
-   - **A5 Allocation Solver**: Pure Python deterministic mathematical optimizer producing 3 fixed options: `fastest`, `max_coverage`, `least_depleting`.
-   - **A6 Arbiter**: Groq `llama-3.3-70b-versatile` with strict Pydantic validation selecting an `option_id` (**firewalled from inventing numbers**).
-   - **A7 Privacy Redactor**: Zero-knowledge identity and GPS masking.
-   - **A8 Admin Gate**: `asyncio.Future` interrupt with configurable Autopilot timer.
-   - **A9 Narrator**: Groq plain-English operational bulletin generator.
-   - **A10 Verification**: Field handshake validation and automated SMS acknowledgement generation (`C|001|7F3K|PLAN101|OK|4|7F`).
-   - **A11 Replanner**: Pure Python re-entry trigger on delivery failure or rejection.
-4. **Real-Time Admin Command Portal & Ingress Simulator**:
-   - Live WebSocket stream (`/ws/agents`) with token streaming.
-   - Interactive Crisis Map visualizer with `$geoNear` radius search rings.
-   - One-click SMS Ingress Simulator with pre-loaded disaster scenarios.
+During catastrophic disasters (earthquakes, cyclones, floods, conflict zones), **broadband and 4G/5G data networks are the first infrastructure to collapse**. Fiber lines sever, base stations lose backhaul, and power grids fail.
+
+**However, low-frequency 2G GSM cellular signals almost always survive.** 
+2G operates at 850/900 MHz frequencies with minimal power requirements. These low-frequency radio waves **penetrate collapsed concrete structures, deep rubble, mountain valleys, and remote rural pockets** where no high-frequency 4G/5G signal or internet packet can reach.
+
+### How PACT Leverages 2G:
+Instead of waiting for internet restoration, **PACT turns 2G SMS into a high-density, tamper-proof emergency coordination grid**. 
+- Using a custom **Base-36 and PACK10 codec**, an entire multi-parameter distress request (victim headcount, trapped status, injuries, required supplies, 1.1-meter pinpoint GPS, and error-checking checksums) is compressed into **just 35 plain characters** (`Q|001|7F3K|15223C03Q0|6QR6VFBQ33|7F`).
+- Leaves **125 characters spare** in a standard 160-character 2G SMS, guaranteeing transmission success even over fluctuating, single-bar cellular connections.
+
+---
+
+## 🛡️ Core Architectural Pillars
+
+1. **Zero-Connectivity Resilience**: Works completely offline using 2G GSM SMS or local device SQLite queues with automatic background sync.
+2. **Zero Hallucinated Aid**: Large Language Models (LLMs) are strictly forbidden from performing mathematical allocations. Pure Python deterministic algorithms compute all supply distribution, while AI agents reason about constraints and triage priorities.
+3. **Zero-Knowledge Privacy**: Requesters' real names, phone numbers, and pinpoint coordinates are masked by default. Sensitive details are only revealed to a confirmed responder after an allocation is officially accepted and locked.
+
+---
+
+## 📱 Android Field Application (`/android`)
+
+The Android mobile client (`org.humanitarian.fieldapp`) is built with **Kotlin and Jetpack Compose**, engineered specifically for first responders and disaster-affected citizens operating without internet.
+
+```
+                  ┌─────────────────────────────────────────┐
+                  │        Android Mobile Client (App)       │
+                  └────────────────────┬────────────────────┘
+                                       │
+                ┌──────────────────────┴──────────────────────┐
+                ▼                                             ▼
+     [ 1. User Interface (UI) ]                   [ 2. Codec & SMS Engine ]
+     • FieldReportScreen                          • SmsEncoder & Pack10
+     • HomeScreen & MyRequests                    • Checksum (XOR CRC)
+     • OfflineMapScreen                           • DirectSmsSender
+     • SmsFallback & SmsDecoder                   • Base36 bitfield packer
+                │                                             │
+                └──────────────────────┬──────────────────────┘
+                                       │
+                ┌──────────────────────┴──────────────────────┐
+                ▼                                             ▼
+    [ 3. Offline & Sync Engine ]                  [ 4. Network & Session ]
+     • OfflineQueue (Local persistence)           • ApiClient (HTTP/REST)
+     • SyncManager (Auto-drain queue)             • UserSession (Preferences)
+```
+
+### Key Android Components:
+* **`SmsEncoder.kt` & `Pack10.kt`**:
+  - Compresses multi-variable distress reports into 10-char Base-36 strings and maps hardware GPS coordinates down to **~1.1-meter precision in 10 characters** (`PACK10`).
+* **`DirectSmsSender.kt`**:
+  - Leverages Android's `SmsManager` to **silently dispatch background 2G SMS packets** directly through the SIM card without opening third-party messenger apps.
+* **`Checksum.kt`**:
+  - Computes a 2-digit uppercase hexadecimal XOR checksum across every frame to reject noisy or corrupted cellular transmissions.
+* **`OfflineQueue.kt` & `SyncManager.kt`**:
+  - Offline-first SQLite queue that holds unsent reports and automatically flushes them via `ApiClient` when an internet or gateway connection is restored.
+* **`FieldReportScreen.kt`**:
+  - Chip-based and dropdown-based UI eliminating panic typos. Automatically acquires GPS from Google Play Services `LocationServices`.
+* **`OfflineMapScreen.kt` & `SmsDecoderScreen.kt`**:
+  - Built-in responder utilities for offline spatial marker navigation and manual SMS frame decoding in the field.
+
+---
+
+## ⚡ 12-Stage Multi-Agent Reasoning Pipeline
+
+```
+[ Ingest (2G SMS / HTTP) ]
+           │
+           ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │               12-STAGE MULTI-AGENT REASONING PIPELINE                  │
+ ├────────────────────────────────────────────────────────────────────────┤
+ │  A0: Intake (Frame parsing & XOR Checksum validation)                  │
+ │  A1: Dedupe (Compound (uid, seq) deduplication)                        │
+ │  A2: Triage (Groq Llama-3.3-70B situational triage & risk scoring)    │
+ │  A3: Geo Matcher (MongoDB $geoNear 2dsphere rings: 10km → 150km)       │
+ │  A4: Advocates (Parallel AI agents simulating provider constraints)    │
+ │  A5: Allocation Solver (Pure Python deterministic math optimizer)      │
+ │  A6: Arbiter (LLM selects best plan — firewalled from inventing numbers)│
+ │  A7: Privacy Redactor (Zero-knowledge masking of names & coordinates)  │
+ │  A8: Admin Gate (Live human override + configurable Autopilot timer)   │
+ │  A9: Narrator (Translates decision into natural language bulletin)     │
+ │  A10: Verification (Generates SMS handshake confirmations)             │
+ │  A11: Replanner (Auto re-routes if a provider rejects or fails)        │
+ └────────────────────────────────────────────────────────────────────────┘
+           │
+           ▼
+[ Live WebSocket Command Portal & Outbound SMS Confirmation ]
+```
 
 ---
 
@@ -60,7 +123,7 @@ export AUTOPILOT_TIMEOUT_SECONDS="3.0"         # Autopilot decision timer
 ```bash
 ./venv/bin/pytest -v
 ```
-All 16 unit and integration tests verify PACK10 round-tripping, XOR checksum arithmetic, deterministic solver math, and API endpoints.
+All unit and integration tests verify PACK10 round-tripping, XOR checksum arithmetic, deterministic solver math, and API endpoints.
 
 ---
 
@@ -85,6 +148,13 @@ Incoming emergency SMS frames are automatically forwarded to `http://<laptop-ip>
 
 ```
 PACT project/
+├── android/                    # Android Kotlin Jetpack Compose Field Application
+│   ├── app/src/main/java/org/humanitarian/fieldapp/
+│   │   ├── sms/                # Base-36, PACK10, Checksum & DirectSmsSender
+│   │   ├── offline/            # OfflineQueue & SubmittedReports
+│   │   ├── sync/               # SyncManager auto-sync engine
+│   │   ├── network/            # ApiClient & REST models
+│   │   └── ui/                 # FieldReport, OfflineMap, Decoder & Home screens
 ├── app/
 │   ├── codec/                  # Base-36, PACK10, XOR Checksum, Q/G/N/R codecs & taxonomy
 │   ├── db/                     # MongoDB client, models, geospatial indexes & seed data
@@ -100,5 +170,5 @@ PACT project/
 ├── start_server.sh             # Startup script
 ├── run_server.py               # Direct runner
 ├── requirements.txt            # Python dependencies
-└── README.md                   # Documentation
+└── README.md                   # Complete Platform & Codec Documentation
 ```
