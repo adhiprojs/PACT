@@ -1,0 +1,370 @@
+================================================================================
+PACT: PRIVACY-PRESERVING MULTI-AGENT HUMANITARIAN COORDINATION PLATFORM
+Complete Hackathon Architecture, Protocol Specification, & Testing Master Guide
+================================================================================
+
+1. EXECUTIVE SUMMARY & THE CORE PROBLEM
+--------------------------------------------------------------------------------
+1.1 Hackathon Context & Philosophy
+* Built for a 24-hour sprint addressing emergency humanitarian logistics during
+  catastrophic infrastructure blackouts.
+* Guiding Philosophy: "Zero-connectivity resilience, zero hallucinated aid,
+  zero-knowledge privacy."
+* Target Users: Disaster victims, volunteer squads, institutional NGOs, CSR
+  units, and emergency dispatch commanders.
+
+1.2 The Disaster Bottlenecks
+* Total Grid & Telecom Collapse: 4G/5G mobile data and fiber connectivity drop,
+  rendering web dashboards and heavy mobile applications inoperable.
+* Uncoordinated Organizational Silos: Relief organizations manage fragmented
+  spreadsheets, resulting in simultaneous hoarding and critical stockouts.
+* Hallucination Risks in Autonomous AI: Standard LLM-based logistics tools invent
+  non-existent supply counts, double-book inventories, and create invalid routes.
+* Vulnerability & Privacy Exploitation: Broadcasting unencrypted victim locations,
+  medical details, or identities over open channels exposes displaced populations
+  to predatory targeting and hoarding.
+
+
+2. SYSTEM ARCHITECTURE & END-TO-END WORKFLOW
+--------------------------------------------------------------------------------
+2.1 Complete Flow Diagram
+
++-----------------------------------------------------------------------------+
+|                      CITIZEN / PROVIDER FIELD CLIENT                        |
+|   (Android Native App: Option-Chip UI, Zero Free-Text Input, PACK10 GPS)    |
++-----------------------------------------------------------------------------+
+                                       |
+                +----------------------+----------------------+
+                |                                             |
+     [Internet Online]                               [Internet Offline]
+                |                                             |
+                v                                             v
++-------------------------------+             +-------------------------------+
+|     HTTP REST ENDPOINT        |             |      GSM-7 SMS FALLBACK       |
+|    /api/v1/pact/ingest        |             |   Raw Cellular Transmission   |
++-------------------------------+             +-------------------------------+
+                |                                             |
+                +----------------------+----------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|                     A0 / A1: INTAKE & INGESTION (Python)                    |
+|   * Validates 2-char XOR Checksum                                           |
+|   * Deduplicates using Device Hash (UID) + Sequence Number via MongoDB      |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|                   A2: TRIAGE AGENT (Groq / Llama 3.3 70B)                   |
+|   * Evaluates situational gravity, medical severity, & life risks           |
+|   * Sets dispatch priority without modifying resource numbers               |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|               A3: GEOSPATIAL CANDIDATE MATCHER (Deterministic)              |
+|   * Executes MongoDB $geoNear aggregation query on 'offers' collection      |
+|   * Cascades radius search rings: 10km -> 25km -> 60km -> 150km             |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|             A4: PROVIDER ADVOCATE AGENTS (LLM Persona Deliberation)         |
+|   * Evaluates candidate constraints (fleet size, fuel, reserve quotas)      |
+|   * Streams threaded debate arguments to WebSocket bus                      |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|               A5: ALLOCATION SOLVER (Deterministic Python)                  |
+|   * Computes exact resource distribution arithmetic                         |
+|   * Emits exactly 3 mathematically sound candidates:                        |
+|     [1] fastest  |  [2] max_coverage  |  [3] least_depleting                |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|                A6: ARBITER AGENT (LLM / Strict Pydantic Schema)             |
+|   * Reviews debate context and selects a single pre-calculated option_id    |
+|   * Strictly prohibited from performing math or altering inventory numbers  |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|                A7: PRIVACY REDACTOR (Deterministic Masking)                 |
+|   * Strips exact GPS coordinates, phone numbers, and identifying records    |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
++-----------------------------------------------------------------------------+
+|          A8: ADMIN GATE (Human-in-the-Loop Interrupt / Autopilot)           |
+|   * Pauses execution on an asyncio.Future                                   |
+|   * Dispatcher can Approve, Override, or Reject                             |
+|   * Configurable Autopilot timeout fallback for automated dispatch          |
++-----------------------------------------------------------------------------+
+                                       |
+                +----------------------+----------------------+
+                |                                             |
+                v                                             v
++-------------------------------+             +-------------------------------+
+|     ADMIN COMMAND PORTAL      |             |    PROVIDER NOTIFICATION      |
+|  * WebSocket Live Feed        |             |  * Identity and exact GPS     |
+|  * Threaded Argument View     |             |    unmasked ONLY upon mutual  |
+|  * A9 Narrator Agent Logs     |             |    plan acceptance            |
++-------------------------------+             +-------------------------------+
+
+
+3. ULTRA-COMPRESSED CODEC & PACK10 GEOLOCATION SPECIFICATION
+--------------------------------------------------------------------------------
+3.1 Requester Frame Specification (10 Characters Base-36)
+Pos 0: Schema Version ('1' = Requester v1)
+Pos 1: Situation Type (0-9, A-B: Flood, Earthquake, Building Collapse, Fire, etc.)
+Pos 2: Headcount Bucket (0=1 person, 1=2, 2=3-4, 3=5-8, 4=9-15, 5=16-30, etc.)
+Pos 3: Injury Severity (0=None, 1=Minor, 2=Serious/Non-ambulatory, 3=Critical)
+Pos 4: Mobility / Entrapment (0=Mobile, 1=Impeded, 2=Trapped Debris, 3=Waterbound)
+Pos 5: Urgency Level (L=Low, M=Medium, H=High, C=Critical)
+Pos 6-8: Needs Bitfield (12 bits base-36: Food, Water, Medical, Tents, Rescue, etc.)
+Pos 9: Vulnerability Bitfield (5 bits: Infants, Elderly, Pregnant, Disabled, Chronic)
+
+3.2 Provider Offer Frame Specification (9 Characters Base-36)
+Pos 0: Schema Version ('2' = Provider v1)
+Pos 1: Organization Type (NGO, Gov, CSR, Local Volunteer, Military)
+Pos 2-4: Resource Inventory Bitfield (Matches Requester 12-bit taxonomy)
+Pos 5: Capacity Volume Bucket
+Pos 6: Service Radius Bucket
+Pos 7: ETA Availability Bucket
+Pos 8: Status Flag (A=Available, L=Limited, U=Unavailable)
+
+3.3 PACK10 High-Precision Geolocation Codec
+* Eliminates heavy float coordinates and external base32 geohash dependencies.
+* Encodes Global GPS Coordinates down to ~1.1-meter precision in 10 characters.
+* Encoding Formula:
+    lat_offset = round((latitude + 90.0) * 100000)
+    lon_offset = round((longitude + 180.0) * 100000)
+    lat_token  = base36_encode(lat_offset) padded to 5 characters
+    lon_token  = base36_encode(lon_offset) padded to 5 characters
+    PACK10_GEO = lat_token + lon_token
+
+* Worked Coordinate Verification:
+    Lat: 23.25991  -> Offset: 11325991 -> Base-36: 6QR6V
+    Lon: 77.41263  -> Offset: 25741263 -> Base-36: FBQ33
+    Combined PACK10: 6QR6VFBQ33
+
+3.4 Complete Unified Wire Frame
+* Example Payload:
+    Q|001|7F3K|15223C03Q0|6QR6VFBQ33|7F
+* Frame Fields:
+    [TYPE]     : Q (Individual Emergency Request)
+    [SEQ]      : 001 (Monotonic message sequence)
+    [UID]      : 7F3K (First 4 chars of sha256(device_install_id))
+    [PAYLOAD]  : 15223C03Q0 (10-char Base-36 crisis state)
+    [PACK10]   : 6QR6VFBQ33 (Encoded 1.1m GPS coordinates)
+    [CHECKSUM] : 7F (2-character hexadecimal XOR checksum)
+* Character Budget: Exactly 35 GSM-7 characters (125 characters spare in standard SMS).
+
+
+4. DUAL-CHANNEL SMS PROTOCOL & MESSAGE TYPES
+--------------------------------------------------------------------------------
+4.1 Message Type Registry
+  Q  : Individual citizen help request
+  G  : Provider resource offer
+  N  : Institutional organization need request
+  R  : Institutional resource availability
+  A  : Allocation / dispatch assignment
+  S  : Status update (0=Assigned, 1=Dispatched, 2=In Transit, 3=Delivered, 4=Blocked)
+  C  : Confirmation / Acknowledgment
+  X  : Cancellation / Abort
+  M  : Map marker point
+  P  : Polygon boundary chunk (multi-part support)
+  RT : Compact route update
+  E  : Error diagnostic report
+
+4.2 Dynamic XOR Checksum Algorithm (Python Implementation)
+```python
+def calculate_xor_checksum(text: str) -> str:
+    """Calculates 2-digit uppercase hex XOR checksum over raw ASCII frame."""
+    val = 0
+    for char in text:
+        val ^= ord(char)
+    return format(val, "02X")
+
+# Example verification:
+# calculate_xor_checksum("Q|001|7F3K|15223C03Q0|6QR6VFBQ33") -> "7F"
+MULTI-AGENT REASONING PIPELINE & DETERMINISTIC BOUNDARIES
+
+5.1 Agent Roles & Implementation Rules
+
+    A0 (Intake): Pure Python. Strips whitespace, parses pipe delimiters, verifies XOR.
+
+    A1 (Dedupe): Pure Python. MongoDB unique compound index on (uid, seq).
+
+    A2 (Triage): Groq / Llama 3.3 70B. Evaluates situational risk into priority rank.
+
+    A3 (Geo Matcher): Pure Python + MongoDB. Runs $geoNear on 2dsphere spatial index.
+
+    A4 (Advocates): Groq / Llama 3.3 70B. Parallel prompt simulating provider stances.
+
+    A5 (Solver): Pure Python. Linear/Greedy inventory optimizer. Generates exactly
+    3 fixed plan options: 'fastest', 'max_coverage', 'least_depleting'.
+
+    A6 (Arbiter): Groq / Llama 3.3 70B. Evaluates A4 arguments and outputs Pydantic
+    schema containing only { "selected_option_id": "fastest", "reasoning": "..." }.
+
+    A7 (Redactor): Pure Python. Masks identity/GPS for zero-knowledge privacy.
+
+    A8 (Admin Gate): Pure Python. asyncio.Future interrupt with Autopilot timeout.
+
+    A9 (Narrator): Groq / Llama 3.3 70B. Emits plain-English live logs for dashboard.
+
+    A10 (Verification): Pure Python. Validates digital handshakes and field acks.
+
+    A11 (Replanner): Pure Python Trigger. Re-enters at A3 upon delivery failure.
+
+5.2 The Hallucination Firewall Principle
+
+    The LLM is strictly prohibited from generating, dividing, or updating numeric
+    quantities in the database.
+
+    Python executes all mathematical operations (A5 Solver). The LLM functions
+    strictly as an evaluator, ranking engine, and plain-English narrator.
+
+    TERMUX ROOTLESS SMS GATEWAY IMPLEMENTATION
+
+6.1 Overview & Architecture
+Turn any Android phone with an active SIM card into an automated SMS gateway
+without root access using Termux and the Termux:API add-on.
+
+6.2 Setup Steps on Android
+
+    Install Termux and Termux:API from F-Droid.
+
+    Grant Permissions in Android Settings:
+
+        SMS (Send and view SMS messages)
+
+        Phone State
+
+        Disable Battery Optimization for Termux & Termux:API (Set to Unrestricted).
+
+    Inside Termux, run:
+    pkg update -y && pkg install termux-api python -y
+    pip install requests
+    termux-wake-lock
+    #!/usr/bin/env python3
+import subprocess
+import json
+import time
+import requests
+import sys
+
+# Configure Laptop Local IP (Phone & Laptop must share Wi-Fi or Mobile Hotspot)
+BACKEND_URL = "[http://192.168.1.50:8000/api/v1/sms/webhook](http://192.168.1.50:8000/api/v1/sms/webhook)"
+POLL_INTERVAL = 2
+PACT_HEADERS = ("Q|", "G|", "N|", "R|", "S|", "C|", "M|", "P|", "RT|", "X|")
+
+def get_incoming_sms():
+    try:
+        res = subprocess.run(["termux-sms-list", "-l", "3"], capture_output=True, text=True, check=True)
+        return json.loads(res.stdout)
+    except Exception as e:
+        return []
+
+def forward_to_backend(payload, sender):
+    try:
+        res = requests.post(BACKEND_URL, data={"Body": payload, "From": sender, "transport": "sms"}, timeout=5)
+        print(f"[FORWARDED] Status: {res.status_code} | Msg: {payload}")
+    except Exception as e:
+        print(f"[ERROR] Failed to reach backend: {e}", file=sys.stderr)
+
+def main():
+    print(f"[*] PACT Gateway Online. Forwarding to {BACKEND_URL}")
+    last_id = None
+    while True:
+        msgs = get_incoming_sms()
+        if msgs:
+            latest = msgs[0]
+            msg_id = latest.get("_id")
+            body = latest.get("body", "").strip()
+            sender = latest.get("number", "UNKNOWN")
+
+            if msg_id != last_id:
+                last_id = msg_id
+                if any(body.startswith(prefix) for prefix in PACT_HEADERS):
+                    print(f"\n[RECEIVED PACT SMS] From {sender}: {body}")
+                    forward_to_backend(body, sender)
+        time.sleep(POLL_INTERVAL)
+
+if __name__ == "__main__":
+    main()
+
+6.4 Backend Automated Response Transmission
+When the allocation is approved, send an SMS acknowledgement back to the phone:
+termux-sms-send -n "+91XXXXXXXXXX" "C|001|7F3K|PLAN101|OK|4|7F"
+7 ADMIN COMMAND PORTAL & REAL-TIME OBSERVABILITY
+
+7.1 Features & Interface Blueprint
+
+    Primary View: Live match stream powered by WebSocket (/ws/agents).
+
+    Threaded Argument Visualizer: Displays multi-agent debate turns as a branching
+    argument tree rather than an unstructured log.
+
+    Interactive Map: Offline-cached MapLibre engine rendering decoded PACK10 pins
+    and dynamic MongoDB $geoNear search rings.
+
+    SMS Ingress Simulator: Slide-out panel for judges to test raw SMS strings with
+    single-click presets if cell tower reception drops indoors.
+
+    Autopilot & Admin Override Bar: Interactive buttons allowing operators to
+    approve allocations, pin specific providers, or reject candidates.
+
+    NOVELTY & COMPETITIVE ADVANTAGE MATRIX
+
++-------------------+----------------------------+-----------------------------+
+| DIMENSION         | TRADITIONAL DISASTER TECH  | PACT PLATFORM (OUR SYSTEM)  |
++-------------------+----------------------------+-----------------------------+
+| Telecom Reliance  | 4G/5G/Wi-Fi mandatory      | Dual-Channel HTTP + GSM-7   |
+| Input Format      | Free-text natural language | Base-36 Constrained Codec   |
+| SMS Payload Size  | Multi-part fragmented SMS  | 35-Char Single-Frame String |
+| Math Integrity    | Unbounded LLM arithmetic   | Deterministic Solver (0% err)|
+| Privacy Model     | Centralized open databases | Zero-Knowledge Handshake    |
+| Infrastructure    | Heavy Kafka/Redis/PostGIS  | In-process asyncio + Mongo  |
++-------------------+----------------------------+-----------------------------+
+
+    60-SECOND LIVE JUDGE DEMO SCRIPT
+
+[00:00 - 00:15] OFFLINE REQUEST GENERATION
+
+    Switch Android phone to Airplane Mode.
+
+    Select chips on app: Building Collapse, 3 People, Serious Injury, Trapped.
+
+    Tap "Send SOS". Show the 35-character frame: Q|001|7F3K|15223C03Q0|6QR6VFBQ33|7F
+
+[00:15 - 00:30] GATEWAY INGESTION & GEOSPATIAL SEARCH
+
+    Frame routes through Termux gateway phone to FastAPI backend.
+
+    Admin Portal decodes PACK10 coordinates to an exact 1.1m MapLibre pin.
+
+    MongoDB executes $geoNear, visually expanding search rings across 3 NGO depots.
+
+[00:30 - 00:45] MULTI-AGENT DEBATE & DETERMINISTIC SOLVER
+
+    Groq / Llama 3.3 70B streams real-time debate between competing provider agents.
+
+    Python A5 Solver calculates 3 mathematically sound allocation options.
+
+    A6 Arbiter evaluates debate trade-offs and locks in optimal Plan ID.
+
+[00:45 - 01:00] ADMIN APPROVAL & REVEAL HANDSHAKE
+
+    Dispatcher clicks "Approve Allocation" on the dashboard.
+
+    Termux gateway fires Confirmation SMS back to requester phone:
+    C|001|7F3K|PLAN101|OK|4|7F
+
+    Victim phone screen flips live to "Dispatched: CSR02 Team En Route (ETA: 4 hrs)".
+
+    Identity and precise GPS unmask securely between provider and victim.
+    ================================================================================

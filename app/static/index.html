@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PACT — Autonomous Multi-Agent Coordination Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <!-- Top Command Header -->
+  <header class="command-header">
+    <div class="brand-block">
+      <div class="brand-monogram">PACT</div>
+      <div class="brand-meta">
+        <h1 id="headerTitle">Autonomous Crisis Coordination Center</h1>
+        <p id="headerSubtitle">Zero-Connectivity Resilience · Zero-Hallucination Solvers · Multi-Agent Negotiation</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Organization / Persona Switcher Dropdown -->
+      <div class="persona-switcher-box">
+        <label for="orgPersonaSelect" class="persona-label">ACTIVE PORTAL:</label>
+        <select id="orgPersonaSelect" class="persona-dropdown" onchange="onOrgPersonaChanged()">
+          <option value="ADMIN_ALL">Global Command (Admin / All)</option>
+          <option value="NGO_TN_RED_CROSS">Red Cross Tamil Nadu</option>
+          <option value="TNDRF_ARAKKONAM_CHENNAI">TNDRF Search and Rescue Force</option>
+          <option value="HOSPITAL_CHENNAI_RGGGH">Apollo / Trauma Medical Center</option>
+          <option value="CSR_TATA_SOUTH_HUB">Tata / CSR Logistics Hub</option>
+          <option value="COIMBATORE_GHAT_RESCUE">Nilgiris Mountain Rescue</option>
+        </select>
+      </div>
+
+      <div id="wsStatusPill" class="hud-pill disconnected">
+        <span class="hud-pip"></span>
+        <span id="wsStatusText">CONNECTING BUS</span>
+      </div>
+
+      <div id="adminAutopilotWrap" class="tactile-switch">
+        <span class="switch-label">Autopilot (3s)</span>
+        <label class="toggle-track">
+          <input type="checkbox" id="autopilotToggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <button id="btnResetSeed" class="btn-tactile">
+        Reset Depots
+      </button>
+
+      <a href="/docs" target="_blank" class="btn-tactile btn-primary">
+        OpenAPI Spec
+      </a>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       1. GLOBAL ADMIN INCIDENT COMMAND VIEW (Visible only to Admin)
+       ========================================================================= -->
+  <main id="adminViewContainer" class="bento-container">
+
+    <!-- Hero Telemetry Matrix -->
+    <section class="hero-telemetry-matrix">
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Ingested SOS Frames</span>
+          <span class="telemetry-code">PACKET_Q</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="statTotalRequests" class="telemetry-num">0</span>
+          <span class="telemetry-sub">transmissions</span>
+        </div>
+      </div>
+
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Active Depots</span>
+          <span class="telemetry-code">REGISTRY</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="statActiveOffers" class="telemetry-num">11</span>
+          <span class="telemetry-sub">relief hubs</span>
+        </div>
+      </div>
+
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Committed Dispatches</span>
+          <span class="telemetry-code">ALLOC_COMMITTED</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="statCommittedMatches" class="telemetry-num">0</span>
+          <span class="telemetry-sub">verified plans</span>
+        </div>
+      </div>
+
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Agent Bus Events</span>
+          <span class="telemetry-code">EVENT_BUS</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="statAgentEvents" class="telemetry-num">0</span>
+          <span class="telemetry-sub">signals</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Master Bento Workspace -->
+    <div class="bento-workspace">
+
+      <!-- LEFT: Pipeline Reasoning, Multi-Agent Debate & Solver Matrix -->
+      <section class="bento-card">
+        <div class="bento-card-header">
+          <div class="bento-title-group">
+            <div class="bento-title">Autonomous Multi-Agent Pipeline and Negotiation</div>
+          </div>
+          <span id="activeRunBadge" class="bento-badge">TRACE: STANDBY</span>
+        </div>
+
+        <div class="bento-body">
+          <!-- 11-Stage Connected Rail Tracker -->
+          <div class="pipeline-rail">
+            <div id="step-A0" class="rail-node">A0 Intake</div>
+            <div id="step-A1" class="rail-node">A1 Dedupe</div>
+            <div id="step-A2" class="rail-node">A2 Triage</div>
+            <div id="step-A3" class="rail-node">A3 GeoNear</div>
+            <div id="step-A4" class="rail-node">A4 Debate</div>
+            <div id="step-A5" class="rail-node">A5 Solver</div>
+            <div id="step-A6" class="rail-node">A6 Arbiter</div>
+            <div id="step-A7" class="rail-node">A7 Privacy</div>
+            <div id="step-A8" class="rail-node">A8 Gate</div>
+            <div id="step-A9" class="rail-node">A9 Bulletin</div>
+            <div id="step-A10" class="rail-node">A10 Commit</div>
+          </div>
+
+          <!-- Tactical Reasoning Stream Deck -->
+          <div class="terminal-deck">
+            <div class="deck-label">
+              <span>Multi-Agent Live Telemetry and Negotiation Stream</span>
+              <span>Groq LLM (Llama 3.3) · Autonomous Agents</span>
+            </div>
+            <div id="streamContent" class="terminal-viewport">System online. Listening on cellular GSM-7 ingress channel...</div>
+          </div>
+
+          <!-- Multi-Agency Tactical Capacity & Deliberation Feed -->
+          <div class="terminal-deck">
+            <div class="deck-label">
+              <span>Nearby Provider Advocate Agents Deliberation (A4)</span>
+              <span>LIVE DATABASE AND TOOL ACCESS</span>
+            </div>
+            <div id="debateFeed" class="capacity-feed-deck">
+              <div class="capacity-node">
+                <div class="capacity-node-header">
+                  <span class="capacity-node-name">Multi-Agency Negotiation Chamber</span>
+                  <span class="capacity-node-role">ACTIVE</span>
+                </div>
+                <div class="capacity-node-body">Awaiting inbound emergency frame to initiate autonomous multi-agent dialogue, route assessment, and consensus building.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3-Option Comparative Solver Deck -->
+          <div class="terminal-deck">
+            <div class="deck-label">
+              <span>Comparative Solver Plans (A5) and Arbiter Selection (A6)</span>
+              <span>DETERMINISTIC OPTIMIZER</span>
+            </div>
+            <div id="solverOptionsGrid" class="solver-deck">
+              <div class="solver-option-card">
+                <div class="solver-card-header">[1] Fastest Response</div>
+                <div class="solver-metrics-row"><span>COV: --</span><span>ETA: --</span></div>
+                <div class="solver-track"><div class="solver-fill" style="width:0%"></div></div>
+              </div>
+              <div class="solver-option-card">
+                <div class="solver-card-header">[2] Max Coverage</div>
+                <div class="solver-metrics-row"><span>COV: --</span><span>ETA: --</span></div>
+                <div class="solver-track"><div class="solver-fill" style="width:0%"></div></div>
+              </div>
+              <div class="solver-option-card">
+                <div class="solver-card-header">[3] Least Depleting</div>
+                <div class="solver-metrics-row"><span>COV: --</span><span>ETA: --</span></div>
+                <div class="solver-track"><div class="solver-fill" style="width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Review Gate Action Bar -->
+          <div id="adminActionBar" class="review-gate-bar" style="display:none;">
+            <div class="gate-info">
+              <h4 id="adminActionTitle">Awaiting Commander Review</h4>
+              <p>Autopilot paused. Verify allocations before dispatch authorization.</p>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn-tactile btn-success" onclick="submitAdminDecision('approve')">Commit Plan</button>
+              <button class="btn-tactile btn-danger" onclick="submitAdminDecision('reject')">Reject Plan</button>
+            </div>
+          </div>
+
+          <!-- Outbound Acknowledgement Deck Banner -->
+          <div id="ackFrameBox" class="ack-deck-banner" style="display:none;"></div>
+
+        </div>
+      </section>
+
+      <!-- RIGHT: Spatial Operations Map & NOC Telemetry -->
+      <section style="display:flex; flex-direction:column; gap:1.25rem;">
+
+        <!-- Spatial Operations Map Panel -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-title-group">
+              <div class="bento-title">Disaster Spatial Operations ($geoNear)</div>
+            </div>
+            <span class="bento-badge">OpenStreetMap</span>
+          </div>
+          <div style="padding:0;">
+            <div id="crisisMapContainer" class="map-canvas-container"></div>
+          </div>
+        </div>
+
+        <!-- NOC Cellular Gateway Operations Panel -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-title-group">
+              <div class="bento-title">GSM-7 Cellular Ingress Operations</div>
+            </div>
+            <span class="hud-tag hud-tag-success">ONLINE</span>
+          </div>
+          <div class="bento-body">
+            <div class="noc-grid">
+              <div class="noc-cell">
+                <div class="noc-cell-label">Ingress Channel</div>
+                <div class="noc-cell-value">GSM Cellular SMS</div>
+              </div>
+              <div class="noc-cell">
+                <div class="noc-cell-label">Privacy Shield</div>
+                <div class="noc-cell-value">Zero-Knowledge 2km Grid</div>
+              </div>
+              <div class="noc-cell">
+                <div class="noc-cell-label">Spatial Codec</div>
+                <div class="noc-cell-value">PACK10 (10-char Base-36)</div>
+              </div>
+              <div class="noc-cell">
+                <div class="noc-cell-label">Data Integrity</div>
+                <div class="noc-cell-value">2-Char Bitwise XOR CRC</div>
+              </div>
+            </div>
+
+            <div style="font-family:var(--font-mono); font-size:0.72rem; color:var(--pact-muted); padding-top:0.4rem; border-top:1px solid var(--pact-border);">
+              Cellular gateway online. Ingesting emergency frames (<code>Q|...</code> / <code>N|...</code>) via cellular SIM.
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- Bottom Registry Tables Section -->
+    <section class="registry-tables-grid">
+
+      <!-- Inbound Emergency SOS Log -->
+      <div class="bento-card">
+        <div class="bento-card-header">
+          <div class="bento-title">Inbound Emergency SOS Log</div>
+          <button class="btn-tactile" onclick="loadRequestsTable()">Refresh</button>
+        </div>
+        <div class="table-responsive">
+          <table class="tactile-table">
+            <thead>
+              <tr>
+                <th>UID</th>
+                <th>Situation</th>
+                <th>Headcount</th>
+                <th>Urgency</th>
+                <th>Frame</th>
+              </tr>
+            </thead>
+            <tbody id="requestsTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Committed Humanitarian Dispatch Registry -->
+      <div class="bento-card">
+        <div class="bento-card-header">
+          <div class="bento-title">Global Committed Dispatch Registry</div>
+          <button class="btn-tactile" onclick="loadMatchesTable()">Refresh</button>
+        </div>
+        <div class="table-responsive">
+          <table class="tactile-table">
+            <thead>
+              <tr>
+                <th>Plan ID</th>
+                <th>Recipient</th>
+                <th>Allocated Provider</th>
+                <th>Status</th>
+                <th>Inspect</th>
+              </tr>
+            </thead>
+            <tbody id="matchesTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       2. FIELD ORGANIZATION DISPATCH PORTAL (Red Cross / TNDRF / Apollo / Tata)
+       ========================================================================= -->
+  <main id="providerViewContainer" class="bento-container" style="display:none;">
+
+    <!-- Active Organization Hero Banner -->
+    <div class="persona-active-banner">
+      <div>
+        <h2 id="pOrgTitle" style="font-size:1.1rem; font-weight:800; color:var(--pact-text); margin:0;">Red Cross Tamil Nadu Relief Command</h2>
+        <p id="pOrgSubtitle" style="font-size:0.78rem; color:var(--pact-muted); margin:0;">Field Operations Portal · Viewing only victims & relief supplies allocated to your organization.</p>
+      </div>
+      <button class="btn-tactile" onclick="resetToAdminView()">Switch to Admin View</button>
+    </div>
+
+    <!-- Provider Specific Metrics Matrix -->
+    <section class="hero-telemetry-matrix">
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Assigned Missions</span>
+          <span class="telemetry-code">MY_ALLOC</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="pStatMissions" class="telemetry-num">0</span>
+          <span class="telemetry-sub">active victims</span>
+        </div>
+      </div>
+
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Committed Supplies</span>
+          <span class="telemetry-code">QUOTA</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="pStatSupplies" class="telemetry-num" style="font-size:1.4rem;">0 Units</span>
+          <span class="telemetry-sub">allocated</span>
+        </div>
+      </div>
+
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Base Depot</span>
+          <span class="telemetry-code">STATION</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="pStatBase" class="telemetry-num" style="font-size:1.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Chennai</span>
+          <span class="telemetry-sub">operational</span>
+        </div>
+      </div>
+
+      <div class="telemetry-card">
+        <div class="telemetry-top">
+          <span class="telemetry-title">Fleet Readiness</span>
+          <span class="telemetry-code">TRANSPORT</span>
+        </div>
+        <div class="telemetry-value-wrap">
+          <span id="pStatFleet" class="telemetry-num" style="font-size:1.1rem;">Active Fleet</span>
+          <span class="telemetry-sub">ready</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Provider Workspace (Assigned Missions & Focused Map) -->
+    <div class="bento-workspace">
+
+      <!-- LEFT: Matched Help Seekers & Mission Details -->
+      <section style="display:flex; flex-direction:column; gap:1.25rem;">
+
+        <!-- Matched Help Seekers Table Card -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-title">Assigned Help-Seeker Queue</div>
+            <span class="bento-badge" id="pQueueCount">0 MATCHES</span>
+          </div>
+          <div class="table-responsive">
+            <table class="tactile-table">
+              <thead>
+                <tr>
+                  <th>Victim ID</th>
+                  <th>Incident & Severity</th>
+                  <th>Casualties</th>
+                  <th>Supplies Needed</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="providerMatchesTableBody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Selected Help Seeker Detail Card -->
+        <div id="pSelectedVictimCard" class="bento-card" style="border-left: 4px solid var(--pact-primary);">
+          <div class="bento-card-header">
+            <div class="bento-title" id="pCardTitle">Target Incident Details</div>
+            <span id="pCardStatusBadge" class="hud-tag hud-tag-info">SELECT A VICTIM</span>
+          </div>
+          <div class="bento-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+              <div class="modal-stat-box">
+                <div class="modal-stat-label">INCIDENT TYPE & CASUALTIES</div>
+                <div id="pDetailIncident" class="modal-stat-val">Select a victim from the queue above</div>
+              </div>
+              <div class="modal-stat-box">
+                <div class="modal-stat-label">ALLOCATED ITEMS TO DELIVER</div>
+                <div id="pDetailItems" class="modal-stat-val">--</div>
+              </div>
+              <div class="modal-stat-box">
+                <div class="modal-stat-label">ESTIMATED TRANSIT & DISTANCE</div>
+                <div id="pDetailETA" class="modal-stat-val">--</div>
+              </div>
+              <div class="modal-stat-box">
+                <div class="modal-stat-label">TARGET GPS COORDINATES</div>
+                <div id="pDetailCoords" class="modal-stat-val" style="font-family:var(--font-mono); font-size:0.75rem;">--</div>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.5rem; padding-top:0.75rem; border-top:1px solid var(--pact-border);">
+              <span style="font-size:0.75rem; color:var(--pact-muted);">Confirm delivery dispatch from your depot:</span>
+              <button class="btn-tactile btn-success" onclick="confirmProviderDispatch()">Confirm Delivery Dispatched</button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT: Focused Provider Operations Map & Live Stockpile -->
+      <section style="display:flex; flex-direction:column; gap:1.25rem;">
+
+        <!-- Focused Provider Operations Map -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-title">Operational Deployment Map and Routing</div>
+            <span class="bento-badge">Assigned Perimeter</span>
+          </div>
+          <div style="padding:0;">
+            <div id="providerMapContainer" class="map-canvas-container"></div>
+          </div>
+        </div>
+
+        <!-- Live Depot Warehouse Reserves Card -->
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <div class="bento-title">Live Warehouse Stockpile Reserves</div>
+            <span class="hud-tag hud-tag-success">ACTIVE INVENTORY</span>
+          </div>
+          <div class="bento-body">
+            <div id="providerStockGrid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.6rem;">
+              <!-- Populated dynamically with live DB inventory -->
+            </div>
+            <div id="providerFleetText" style="font-size:0.75rem; color:var(--pact-text-secondary); margin-top:0.4rem; padding-top:0.5rem; border-top:1px solid var(--pact-border);">
+              Fleet: Loading vehicle readiness...
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- Interactive Dispatch Detail Inspection Modal -->
+  <div id="dispatchDetailModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="modalPlanTitle" style="font-size:1rem; font-weight:700; margin:0;">Dispatch Plan Inspection</h3>
+          <p id="modalPlanSubtitle" style="font-size:0.75rem; color:var(--pact-muted); margin:0;">Plan ID: PLAN_00000</p>
+        </div>
+        <button class="btn-tactile" onclick="closeDispatchModal()">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-grid">
+          <!-- Left: Tactical Details -->
+          <div style="display:flex; flex-direction:column; gap:0.75rem;">
+            <div class="modal-stat-box">
+              <div class="modal-stat-label">RECIPIENT & INCIDENT</div>
+              <div id="modalRecipient" class="modal-stat-val">Target: NGO01 · Flood Crisis</div>
+            </div>
+
+            <div class="modal-stat-box">
+              <div class="modal-stat-label">ALLOCATED SUPPLIES & QUOTA</div>
+              <div id="modalSupplies" class="modal-stat-val">286 Hygiene Kits</div>
+            </div>
+
+            <div class="modal-stat-box">
+              <div class="modal-stat-label">ASSIGNED DEPOT & FLEET</div>
+              <div id="modalDepot" class="modal-stat-val">Red Cross Tamil Nadu Relief (ETA ~0.5h)</div>
+            </div>
+
+            <div class="modal-stat-box">
+              <div class="modal-stat-label">TARGET GPS COORDINATES</div>
+              <div id="modalCoords" class="modal-stat-val" style="font-family:var(--font-mono); font-size:0.8rem;">[13.00835, 80.00557] · PACK10: 64S6BFHA5P</div>
+            </div>
+          </div>
+
+          <!-- Right: Modal Mini-Map View -->
+          <div style="display:flex; flex-direction:column; gap:0.5rem;">
+            <div style="font-size:0.75rem; font-weight:700; color:var(--pact-text-secondary);">TACTICAL OPENSTREETMAP ROUTING VIEW:</div>
+            <div id="modalMapCanvas" style="height:230px; width:100%; border-radius:8px; border:1px solid var(--pact-border);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span id="modalStatusBadge" class="hud-tag hud-tag-success">DISPATCH COMMITTED</span>
+        <button class="btn-tactile btn-primary" onclick="focusOnMainMap()">View on Full Operations Map</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/static/js/map.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
